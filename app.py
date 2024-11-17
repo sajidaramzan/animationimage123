@@ -5,47 +5,61 @@ from PIL import Image
 import tempfile
 import os
 from moviepy.editor import ImageSequenceClip
-import random
 from pathlib import Path
 import time
 
+# Configure Streamlit page
+st.set_page_config(
+    page_title="Image to Video Animation",
+    page_icon="🎬",
+    layout="wide"
+)
+
+# Initialize session state
+if 'processed_frames' not in st.session_state:
+    st.session_state.processed_frames = None
+
 def create_transition(img1, img2, effect="fade", steps=30):
     """Create transition between two images"""
+    frames = []
+    img1 = np.array(img1, dtype=np.float32)
+    img2 = np.array(img2, dtype=np.float32)
+    
     if effect == "fade":
-        return [cv2.addWeighted(img1, 1 - i/steps, img2, i/steps, 0) 
-                for i in range(steps)]
+        for i in range(steps):
+            alpha = i / steps
+            frame = cv2.addWeighted(img1, 1 - alpha, img2, alpha, 0)
+            frames.append(frame.astype(np.uint8))
     elif effect == "slide":
-        frames = []
         for i in range(steps):
             frame = img1.copy()
             offset = int((i/steps) * img1.shape[1])
             frame[:, :offset] = img2[:, :offset]
-            frames.append(frame)
-        return frames
+            frames.append(frame.astype(np.uint8))
     elif effect == "zoom":
-        frames = []
         for i in range(steps):
             scale = 1 + (i/steps)
             center_x, center_y = img1.shape[1] // 2, img1.shape[0] // 2
             M = cv2.getRotationMatrix2D((center_x, center_y), 0, scale)
-            frame = cv2.warpAffine(img1, M, (img1.shape[1], img1.shape[0]))
+            frame = cv2.warpAffine(img1.astype(np.uint8), M, (img1.shape[1], img1.shape[0]))
             frames.append(frame)
-        return frames
-
-def process_image(image, target_size=(640, 480)):
-    """Process uploaded image to consistent size"""
-    if isinstance(image, str):
-        img = cv2.imread(image)
-    else:
-        img = np.array(Image.open(image))
-        if len(img.shape) == 2:  # Grayscale
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        elif img.shape[2] == 4:  # RGBA
-            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     
-    return cv2.resize(img, target_size)
+    return frames
+
+def process_image(uploaded_file, target_size=(640, 480)):
+    """Process uploaded image to consistent size"""
+    # Read image using PIL
+    image = Image.open(uploaded_file)
+    
+    # Convert to RGB if necessary
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    # Resize
+    image = image.resize(target_size, Image.Resampling.LANCZOS)
+    
+    # Convert to numpy array
+    return np.array(image)
 
 def create_animation(images, effect, fps, transition_duration):
     """Create animation from list of images"""
@@ -97,7 +111,7 @@ def main():
             cols = st.columns(min(4, len(processed_images)))
             for idx, col in enumerate(cols):
                 if idx < len(processed_images):
-                    col.image(cv2.cvtColor(processed_images[idx], cv2.COLOR_BGR2RGB),
+                    col.image(processed_images[idx],
                             caption=f"Image {idx+1}",
                             use_column_width=True)
         
@@ -123,9 +137,8 @@ def main():
                     status_text.text("Generating video file...")
                     output_path = os.path.join(temp_dir, "animation.mp4")
                     
-                    clip = ImageSequenceClip([cv2.cvtColor(f, cv2.COLOR_BGR2RGB) 
-                                           for f in frames], fps=fps)
-                    clip.write_videofile(output_path, fps=fps, codec='libx264')
+                    clip = ImageSequenceClip(frames, fps=fps)
+                    clip.write_videofile(output_path, fps=fps, codec='libx264', audio=False)
                     progress_bar.progress(90)
                     
                     # Prepare download button
@@ -163,9 +176,4 @@ def main():
     """)
 
 if __name__ == "__main__":
-    st.set_page_config(
-        page_title="Image to Video Animation",
-        page_icon="🎬",
-        layout="wide"
-    )
     main()
