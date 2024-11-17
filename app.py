@@ -7,372 +7,277 @@ import os
 import io
 from pathlib import Path
 import time
+from scipy import ndimage
 
-class AdvancedImageAnimator:
+class StreamlitImageAnimator:
     def __init__(self):
         self.effects = {
-            'walking': self.create_walking_effect,
-            'working': self.create_working_effect,
-            'typing': self.create_typing_effect,
-            'nodding': self.create_nodding_effect,
-            'floating': self.create_floating_effect,
-            'spinning': self.create_spinning_effect,
-            'pulse': self.create_pulse_effect
+            'bounce': self.create_bounce_effect,
+            'rotate': self.create_rotate_effect,
+            'zoom': self.create_zoom_effect,
+            'wave': self.create_wave_effect,
+            'fade': self.create_fade_effect,
+            'shake': self.create_shake_effect
         }
-        
-    def apply_image_filters(self, image, filters):
-        """Apply various image filters"""
-        img = Image.fromarray(image)
-        
-        if filters.get('brightness'):
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(filters['brightness'])
-            
-        if filters.get('contrast'):
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(filters['contrast'])
-            
-        if filters.get('blur'):
-            img = img.filter(ImageFilter.GaussianBlur(filters['blur']))
-            
-        if filters.get('sharpen'):
-            img = img.filter(ImageFilter.SHARPEN)
-            
-        return np.array(img)
 
-    def create_walking_effect(self, image, frames=60, intensity=1.0):
-        """Enhanced walking animation effect"""
-        height, width = image.shape[:2]
+    def create_bounce_effect(self, img_array, frames=30, intensity=1.0):
+        """Create a bouncing animation effect"""
+        height, width = img_array.shape[:2]
         result = []
         
         for i in range(frames):
-            frame = image.copy()
-            # Enhanced side-to-side movement
-            shift = int(10 * intensity * np.sin(2 * np.pi * i / 30))
-            vertical_shift = int(5 * intensity * np.sin(2 * np.pi * i / 15))
+            # Calculate vertical displacement
+            displacement = int(20 * intensity * abs(np.sin(2 * np.pi * i / frames)))
+            frame = np.zeros_like(img_array)
             
-            # Create transformation matrix
-            M = np.float32([
-                [1, 0, shift],
-                [0, 1, vertical_shift]
-            ])
-            
-            # Apply transformation
-            frame = self._apply_affine_transform(frame, M)
+            # Apply displacement
+            if displacement > 0:
+                frame[displacement:, :] = img_array[:-displacement, :]
+            else:
+                frame = img_array.copy()
+                
             result.append(frame)
         
         return result
 
-    def create_floating_effect(self, image, frames=60, intensity=1.0):
-        """Create floating/hovering animation effect"""
-        height, width = image.shape[:2]
-        result = []
-        
-        for i in range(frames):
-            frame = image.copy()
-            # Combined vertical and slight rotation movement
-            vertical_shift = int(10 * intensity * np.sin(2 * np.pi * i / 30))
-            angle = 2 * intensity * np.sin(2 * np.pi * i / 60)
-            
-            # Create transformation matrix
-            M = np.float32([
-                [np.cos(angle), -np.sin(angle), width * 0.1 * np.sin(angle)],
-                [np.sin(angle), np.cos(angle), vertical_shift]
-            ])
-            
-            # Apply transformation
-            frame = self._apply_affine_transform(frame, M)
-            result.append(frame)
-        
-        return result
-
-    def create_spinning_effect(self, image, frames=60, intensity=1.0):
-        """Create spinning animation effect"""
-        height, width = image.shape[:2]
+    def create_rotate_effect(self, img_array, frames=30, intensity=1.0):
+        """Create a rotating animation effect"""
         result = []
         
         for i in range(frames):
             # Calculate rotation angle
-            angle = (360 * i / frames) * intensity
-            
-            # Create rotation matrix
-            M = cv2.getRotationMatrix2D((width/2, height/2), angle, 1.0)
-            
-            # Apply rotation
-            rotated = cv2.warpAffine(image, M, (width, height))
-            result.append(rotated)
-            
-        return result
-
-    def create_pulse_effect(self, image, frames=60, intensity=1.0):
-        """Create pulsing/scaling animation effect"""
-        height, width = image.shape[:2]
-        result = []
-        
-        for i in range(frames):
-            # Calculate scale factor
-            scale = 1 + 0.1 * intensity * np.sin(2 * np.pi * i / 30)
-            
-            # Create scaling matrix
-            M = cv2.getRotationMatrix2D((width/2, height/2), 0, scale)
-            
-            # Apply scaling
-            scaled = cv2.warpAffine(image, M, (width, height))
-            result.append(scaled)
-            
-        return result
-
-    def _apply_affine_transform(self, image, matrix):
-        """Helper function to apply affine transformation"""
-        height, width = image.shape[:2]
-        return cv2.warpAffine(image, matrix, (width, height))
-
-    # Previous effect methods remain the same...
-    def create_working_effect(self, image, frames=60, intensity=1.0):
-        """Create working animation effect (arm movement)"""
-        height, width = image.shape[:2]
-        result = []
-        
-        arm_top = height // 3
-        arm_bottom = 2 * height // 3
-        arm_left = width // 3
-        arm_right = 2 * width // 3
-        
-        for i in range(frames):
-            frame = image.copy()
-            angle = 10 * intensity * np.sin(2 * np.pi * i / 30)
-            
-            center = ((arm_right - arm_left) // 2, (arm_bottom - arm_top) // 2)
-            M = cv2.getRotationMatrix2D(center, angle, 1.0)
-            
-            arm_region = frame[arm_top:arm_bottom, arm_left:arm_right]
-            rotated_arm = cv2.warpAffine(arm_region, M, 
-                                       (arm_right - arm_left, arm_bottom - arm_top))
-            
-            frame[arm_top:arm_bottom, arm_left:arm_right] = rotated_arm
+            angle = intensity * 360 * i / frames
+            frame = ndimage.rotate(img_array, angle, reshape=False)
             result.append(frame)
+            
         return result
 
-    def create_typing_effect(self, image, frames=60, intensity=1.0):
-        """Create typing animation effect"""
-        height, width = image.shape[:2]
+    def create_zoom_effect(self, img_array, frames=30, intensity=1.0):
+        """Create a zoom pulse animation effect"""
+        height, width = img_array.shape[:2]
         result = []
         
-        hands_top = 2 * height // 3
-        hands_bottom = height
-        
         for i in range(frames):
-            frame = image.copy()
-            vertical_shift = int(5 * intensity * np.sin(4 * np.pi * i / 30))
+            # Calculate zoom factor
+            zoom = 1 + 0.2 * intensity * np.sin(2 * np.pi * i / frames)
+            frame = ndimage.zoom(img_array, [zoom, zoom, 1] if len(img_array.shape) > 2 else [zoom, zoom])
             
-            M = np.float32([[1, 0, 0], [0, 1, vertical_shift]])
-            hands_region = frame[hands_top:hands_bottom, :]
-            shifted_hands = cv2.warpAffine(hands_region, M, 
-                                         (width, hands_bottom - hands_top))
+            # Crop to original size
+            y, x = frame.shape[:2]
+            start_y = (y - height) // 2
+            start_x = (x - width) // 2
+            frame = frame[start_y:start_y+height, start_x:start_x+width]
             
-            frame[hands_top:hands_bottom, :] = shifted_hands
             result.append(frame)
+            
         return result
 
-    def create_nodding_effect(self, image, frames=60, intensity=1.0):
-        """Create nodding animation effect"""
-        height, width = image.shape[:2]
+    def create_wave_effect(self, img_array, frames=30, intensity=1.0):
+        """Create a wave animation effect"""
+        height, width = img_array.shape[:2]
         result = []
         
-        head_height = height // 3
-        
         for i in range(frames):
-            frame = image.copy()
-            angle = 5 * intensity * np.sin(2 * np.pi * i / 30)
-            
-            center = (width // 2, head_height // 2)
-            M = cv2.getRotationMatrix2D(center, angle, 1.0)
-            head_region = frame[:head_height, :]
-            rotated_head = cv2.warpAffine(head_region, M, (width, head_height))
-            
-            frame[:head_height, :] = rotated_head
+            frame = np.zeros_like(img_array)
+            for x in range(width):
+                offset = int(10 * intensity * np.sin(2 * np.pi * (x/width + i/frames)))
+                for y in range(height):
+                    new_y = (y + offset) % height
+                    frame[new_y, x] = img_array[y, x]
             result.append(frame)
+            
         return result
 
-def process_image(uploaded_file, target_size=(640, 480)):
-    """Process uploaded image with error handling"""
+    def create_fade_effect(self, img_array, frames=30, intensity=1.0):
+        """Create a fade in/out effect"""
+        result = []
+        
+        for i in range(frames):
+            # Calculate opacity
+            opacity = abs(np.sin(2 * np.pi * i / frames))
+            frame = (img_array * opacity).astype(np.uint8)
+            result.append(frame)
+            
+        return result
+
+    def create_shake_effect(self, img_array, frames=30, intensity=1.0):
+        """Create a shaking animation effect"""
+        height, width = img_array.shape[:2]
+        result = []
+        
+        for i in range(frames):
+            # Random displacement
+            dx = int(10 * intensity * np.random.randn())
+            dy = int(10 * intensity * np.random.randn())
+            
+            frame = np.zeros_like(img_array)
+            
+            # Ensure displacement doesn't exceed image boundaries
+            if dx > 0:
+                frame[:, dx:] = img_array[:, :-dx]
+            else:
+                frame[:, :dx] = img_array[:, -dx:]
+                
+            if dy > 0:
+                frame[dy:, :] = frame[:-dy, :]
+            else:
+                frame[:dy, :] = frame[-dy:, :]
+                
+            result.append(frame)
+            
+        return result
+
+def process_image(uploaded_file, max_size=800):
+    """Process uploaded image with size limitation"""
     try:
         image = Image.open(uploaded_file)
+        
+        # Convert to RGB if necessary
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        image = image.resize(target_size, Image.Resampling.LANCZOS)
+        
+        # Resize image while maintaining aspect ratio
+        ratio = min(max_size / image.size[0], max_size / image.size[1])
+        if ratio < 1:
+            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            image = image.resize(new_size, Image.Resampling.LANCZOS)
+        
         return np.array(image), None
     except Exception as e:
         return None, f"Error processing image: {str(e)}"
 
 def main():
-    st.set_page_config(page_title="Advanced Image Animator", 
-                      page_icon="🎬", 
-                      layout="wide")
-    
-    st.title("🎨 Advanced Image Animation Studio")
-    
+    st.set_page_config(
+        page_title="Animated Image Creator",
+        page_icon="🎨",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+
+    st.title("🎨 Animated Image Creator")
+    st.markdown("Create stunning animations from your images!")
+
     # Initialize session state
-    if 'processed_image' not in st.session_state:
-        st.session_state.processed_image = None
-    if 'animation_history' not in st.session_state:
-        st.session_state.animation_history = []
-    
-    # Create tabs for different sections
-    tab1, tab2, tab3 = st.tabs(["Create Animation", "History", "Help"])
-    
-    with tab1:
-        col1, col2 = st.columns([1, 2])
+    if 'history' not in st.session_state:
+        st.session_state.history = []
+
+    # Sidebar
+    with st.sidebar:
+        st.header("Settings")
+        uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
         
-        with col1:
-            st.subheader("Upload & Settings")
-            uploaded_file = st.file_uploader("Upload Image", 
-                                           type=["png", "jpg", "jpeg"])
+        animation_type = st.selectbox(
+            "Animation Effect",
+            ["bounce", "rotate", "zoom", "wave", "fade", "shake"]
+        )
+        
+        with st.expander("Advanced Settings"):
+            fps = st.slider("Frames Per Second", 10, 60, 30)
+            duration = st.slider("Duration (seconds)", 1, 5, 2)
+            intensity = st.slider("Effect Intensity", 0.1, 2.0, 1.0)
+
+    # Main content
+    col1, col2 = st.columns([2, 3])
+
+    with col1:
+        if uploaded_file:
+            st.subheader("Original Image")
+            image, error = process_image(uploaded_file)
             
-            # Animation settings
-            animation_type = st.selectbox("Animation Type",
-                                        ["walking", "working", "typing", 
-                                         "nodding", "floating", "spinning", 
-                                         "pulse"])
+            if error:
+                st.error(error)
+            else:
+                st.image(image, use_column_width=True)
+
+    with col2:
+        if uploaded_file and image is not None:
+            st.subheader("Animation Preview")
             
-            # Advanced settings
-            with st.expander("Advanced Settings"):
-                fps = st.slider("Frames per second", 15, 60, 30)
-                duration = st.slider("Duration (seconds)", 1, 10, 3)
-                intensity = st.slider("Effect Intensity", 0.1, 2.0, 1.0)
-                
-                # Image enhancement options
-                st.subheader("Image Enhancement")
-                brightness = st.slider("Brightness", 0.5, 2.0, 1.0)
-                contrast = st.slider("Contrast", 0.5, 2.0, 1.0)
-                blur = st.slider("Blur", 0.0, 5.0, 0.0)
-                sharpen = st.checkbox("Sharpen")
-            
-        with col2:
-            st.subheader("Preview & Output")
-            
-            if uploaded_file:
-                image, error = process_image(uploaded_file)
-                
-                if error:
-                    st.error(error)
-                else:
-                    st.session_state.processed_image = image
-                    st.image(image, caption="Original Image", 
-                            use_column_width=True)
-                    
-                    if st.button("Generate Animation"):
-                        try:
-                            animator = AdvancedImageAnimator()
-                            
-                            # Apply image filters
-                            filters = {
-                                'brightness': brightness,
-                                'contrast': contrast,
-                                'blur': blur,
-                                'sharpen': sharpen
-                            }
-                            
-                            enhanced_image = animator.apply_image_filters(
-                                image, filters)
-                            
-                            # Create animation frames
-                            frames = animator.effects[animation_type](
-                                enhanced_image, 
-                                frames=duration * fps,
-                                intensity=intensity
+            if st.button("Generate Animation", type="primary"):
+                with st.spinner("Creating animation..."):
+                    try:
+                        # Create animation
+                        animator = StreamlitImageAnimator()
+                        frames = animator.effects[animation_type](
+                            image,
+                            frames=duration * fps,
+                            intensity=intensity
+                        )
+                        
+                        # Create video
+                        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+                            clip = ImageSequenceClip(frames, fps=fps)
+                            clip.write_videofile(
+                                tmp_file.name,
+                                fps=fps,
+                                codec='libx264',
+                                audio=False,
+                                verbose=False,
+                                logger=None
                             )
                             
-                            # Create video
-                            with tempfile.TemporaryDirectory() as temp_dir:
-                                output_path = os.path.join(temp_dir, 
-                                                         "animation.mp4")
-                                clip = ImageSequenceClip(frames, fps=fps)
-                                clip.write_videofile(output_path, fps=fps, 
-                                                   codec='libx264', 
-                                                   audio=False)
-                                
-                                with open(output_path, 'rb') as f:
-                                    video_bytes = f.read()
-                                
-                                # Save to history
-                                st.session_state.animation_history.append({
-                                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                                    'type': animation_type,
-                                    'video': video_bytes
-                                })
-                                
-                                # Display video and download button
-                                st.video(video_bytes)
-                                st.download_button(
-                                    "Download Animation",
-                                    video_bytes,
-                                    "animation.mp4",
-                                    "video/mp4"
-                                )
-                                
-                        except Exception as e:
-                            st.error(f"Animation error: {str(e)}")
-            else:
-                st.info("Please upload an image to start.")
-    
-    with tab2:
-        st.subheader("Animation History")
-        if st.session_state.animation_history:
-            for idx, anim in enumerate(reversed(
-                st.session_state.animation_history)):
-                with st.expander(
-                    f"Animation {idx+1} - {anim['type']} "
-                    f"({anim['timestamp']})"):
-                    st.video(anim['video'])
-                    st.download_button(
-                        f"Download Animation {idx+1}",
-                        anim['video'],
-                        f"animation_{idx+1}.mp4",
-                        "video/mp4"
-                    )
-        else:
-            st.info("No animations created yet.")
-    
-    with tab3:
-        st.subheader("How to Use")
+                            # Read the video file
+                            with open(tmp_file.name, 'rb') as f:
+                                video_bytes = f.read()
+                            
+                            # Clean up
+                            os.unlink(tmp_file.name)
+                        
+                        # Add to history
+                        st.session_state.history.append({
+                            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'effect': animation_type,
+                            'video': video_bytes
+                        })
+                        
+                        # Display video and download button
+                        st.video(video_bytes)
+                        st.download_button(
+                            "Download Animation",
+                            video_bytes,
+                            f"animation_{animation_type}.mp4",
+                            "video/mp4"
+                        )
+                        
+                    except Exception as e:
+                        st.error(f"An error occurred: {str(e)}")
+
+    # History section
+    if st.session_state.history:
+        st.header("Animation History")
+        for idx, item in enumerate(reversed(st.session_state.history[-5:])):
+            with st.expander(f"Animation {len(st.session_state.history)-idx}: {item['effect']} ({item['timestamp']})"):
+                st.video(item['video'])
+                st.download_button(
+                    f"Download Animation {len(st.session_state.history)-idx}",
+                    item['video'],
+                    f"animation_{item['effect']}_{idx}.mp4",
+                    "video/mp4"
+                )
+
+    # Instructions
+    with st.expander("How to Use"):
         st.markdown("""
-        1. **Upload Image**: Start by uploading an image in JPG or PNG format
-        2. **Choose Animation**: Select from various animation effects
-        3. **Adjust Settings**: Customize FPS, duration, and intensity
-        4. **Enhance Image**: Use advanced settings to adjust brightness, 
-           contrast, and other effects
-        5. **Generate**: Click 'Generate Animation' to create your animation
-        6. **Download**: Save your animation as an MP4 file
+        ### Instructions
+        1. Upload an image using the sidebar
+        2. Choose an animation effect
+        3. Adjust advanced settings if desired
+        4. Click 'Generate Animation' to create your animation
+        5. Download the result or browse your animation history
         
-        **Available Effects:**
-        - Walking: Creates walking motion
-        - Working: Simulates working/arm movement
-        - Typing: Creates typing animation
-        - Nodding: Head nodding animation
-        - Floating: Hovering effect
-        - Spinning: Rotation effect
-        - Pulse: Scale pulsing effect
+        ### Available Effects
+        - **Bounce**: Creates a bouncing motion
+        - **Rotate**: Spins the image
+        - **Zoom**: Pulsing zoom effect
+        - **Wave**: Rippling wave animation
+        - **Fade**: Smooth fade in/out
+        - **Shake**: Random shaking motion
         
-        **Tips:**
+        ### Tips
+        - Larger images will be automatically resized for better performance
         - Higher FPS creates smoother animations but takes longer to process
-        - Adjust intensity to control the strength of the effect
-        - Use image enhancement to improve the final result
+        - Adjust the intensity slider to control the strength of the effect
         """)
 
 if __name__ == "__main__":
-    # Handling import error for OpenCV
-    try:
-        import cv2
-    except ImportError:
-        st.error("""
-        OpenCV (cv2) is not installed. Please install it using:
-        ```
-        pip install opencv-python
-        ```
-        If you're using Streamlit Cloud, make sure to include opencv-python 
-        in your requirements.txt file.
-        """)
-        st.stop()
-    
     main()
